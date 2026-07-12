@@ -306,13 +306,14 @@ Repository: zlh-428/open-maestri
 
 ## Star History
 
-<a href="https://www.star-history.com/?type=date&repos=zlh-428%2Fopen-maestri">
+<a href="https://www.star-history.com/?repos=zlh-428%2Fopen-maestri&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&theme=dark&legend=top-left&sealed_token=C3LKeQihgkDXf0PU-B43ZBlS3sIig_fsA-Gznf3S4jlL8sA9dQ1OpNAJrC3EOVDVgPwZtfyXPEvrzH8VVZ80Y97-eGiHz9888TuWWX-QMCNCtDcnaMmjmA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&legend=top-left&sealed_token=C3LKeQihgkDXf0PU-B43ZBlS3sIig_fsA-Gznf3S4jlL8sA9dQ1OpNAJrC3EOVDVgPwZtfyXPEvrzH8VVZ80Y97-eGiHz9888TuWWX-QMCNCtDcnaMmjmA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zlh-428/open-maestri&type=date&legend=top-left&sealed_token=C3LKeQihgkDXf0PU-B43ZBlS3sIig_fsA-Gznf3S4jlL8sA9dQ1OpNAJrC3EOVDVgPwZtfyXPEvrzH8VVZ80Y97-eGiHz9888TuWWX-QMCNCtDcnaMmjmA" />
  </picture>
 </a>
+
 
 ## Acknowledgments
 
