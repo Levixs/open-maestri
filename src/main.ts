@@ -1,6 +1,10 @@
 import "./style.css";
 import { invoke } from "@tauri-apps/api/core";
 import type { CanvasNode, WorkspaceConnection, WorkspaceDocument } from "./types";
+import { mountTerminal, type TerminalView } from "./terminal";
+
+const terminalViews = new Map<string, TerminalView>();
+const spawnedTerminalIds = new Set<string>();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 let model: WorkspaceDocument | null = null;
@@ -22,19 +26,19 @@ const selectedNode = () => model?.payload.nodes.find((node) => node.id === selec
 function title(node: CanvasNode): string { const [kind, data] = content(node); if (kind === "terminal") return String(data.name ?? "Terminal"); if (kind === "stickyNote") return String(data.fileName ?? "Note").replace(/\.md$/, ""); if (kind === "portal") return String(data.name ?? "Portal"); if (kind === "fileTree") return String(data.name ?? "Files"); return kind === "text" ? String(data.text ?? "Text") : kind; }
 function tool(name: string, label: string, active = false) { return `<button class='tool-button${active ? " active" : ""}' title='${label}' aria-label='${label}'>${icon(name)}</button>`; }
 
-function terminalMarkup(data: Record<string, unknown>): string {
+function terminalMarkup(nodeId: string, data: Record<string, unknown>): string {
   const manager = data.isManager === true ? `<span class='terminal-manager' title='Maestro'>${icon("sparkles")}</span>` : "";
   const attention = data.status === "idle" ? "" : "<i class='attention-dot'></i>";
   const role = data.assignedRoleId ? "<span class='role-badge'>Role</span>" : "";
-  const command = escapeHtml(String(data.command ?? "")); const directory = escapeHtml(String(data.workingDirectory ?? ""));
-  return `<div class='terminal-header-accessory'>${role}${manager}${attention}</div><section class='terminal-content'><span class='terminal-prompt'>›</span> ${command || "Terminal session"}</section><footer class='terminal-footer'>${icon("folder")}<span>${directory}</span></footer>`;
+  const directory = escapeHtml(String(data.workingDirectory ?? ""));
+  return `<div class='terminal-header-accessory'>${role}${manager}${attention}</div><section class='terminal-content'><div class='terminal-mount' data-terminal-id='${nodeId}'></div></section><footer class='terminal-footer'>${icon("folder")}<span>${directory}</span></footer>`;
 }
 function noteMarkup(data: Record<string, unknown>): string { const formatted = data.isPreviewing === true; return `<section class='note-content'><div class='note-mode'>${formatted ? "Formatted" : "Raw"}</div><p>${formatted ? "Markdown preview" : "Write Markdown…"}</p></section>`; }
 function portalMarkup(data: Record<string, unknown>): string { const url = escapeHtml(String(data.currentURL ?? "")); return `<section class='portal-content'><nav class='portal-nav'><span class='portal-navigation'><button disabled>${icon("back")}</button><button disabled>${icon("forward")}</button><button>${icon("refresh")}</button></span><label class='portal-address'>${icon("search")}<input value='${url}' placeholder='Search or enter website name' aria-label='Portal URL'></label></nav><div class='portal-empty'>${icon("globe")}<span>Enter a URL to begin</span></div></section>`; }
 
 function renderNode(node: CanvasNode): string {
   const [kind, data] = content(node); const [[x, y], [width, height]] = node.frame; const selected = selectedNodeId === node.id ? " selected" : ""; const isNote = kind === "stickyNote"; const typeIcon = isNote ? "note" : kind === "portal" ? "globe" : kind === "terminal" ? "terminal" : kind === "fileTree" ? "folder" : "pencil"; const color = typeof data.color === "string" ? data.color : kind === "portal" ? "#007aff" : "#1f1f1f";
-  const typeBody = kind === "terminal" ? terminalMarkup(data) : isNote ? noteMarkup(data) : kind === "portal" ? portalMarkup(data) : `<section class='generic-node-content'>${escapeHtml(kind === "text" ? String(data.text ?? "") : String(data.rootPath ?? kind))}</section>`;
+  const typeBody = kind === "terminal" ? terminalMarkup(node.id, data) : isNote ? noteMarkup(data) : kind === "portal" ? portalMarkup(data) : `<section class='generic-node-content'>${escapeHtml(kind === "text" ? String(data.text ?? "") : String(data.rootPath ?? kind))}</section>`;
   return `<article class='node ${kind}-node${selected}' data-node-id='${node.id}' style='left:${x}px;top:${y}px;width:${width}px;height:${height}px;z-index:${node.zIndex};--node-color:${color};--note-tint:${isNote ? color : "transparent"}'><div class='node-inner'><header class='node-header'>${icon(typeIcon)}<span>${escapeHtml(title(node))}</span>${kind === "terminal" ? "" : "<span class='node-spacer'></span>"}</header>${typeBody}</div><i class='resize-handle'></i></article>`;
 }
 
@@ -87,6 +91,22 @@ function render(): void {
   const payload = model?.payload; const nodes = payload?.nodes ?? []; const workspaceName = payload?.name ?? "Open workspace"; const visible = workspaceName.toLocaleLowerCase().includes(workspaceSearch.toLocaleLowerCase());
   app.innerHTML = `<main class='app-shell'><aside class='sidebar' style='width:${sidebarWidth}px'><header class='sidebar-title'><span>Workspaces</span><button title='New workspace'>${icon("plus")}</button></header><label class='sidebar-search'>${icon("search")}<input id='workspace-search' value='${escapeHtml(workspaceSearch)}' placeholder='Search workspaces'></label><section class='workspace-list'>${visible ? `<div class='workspace-group'><button class='group-label'>${icon("chevron")}<span>Workspaces</span></button><button class='workspace-row selected'>${icon("folder")}<span class='workspace-meta'><span class='workspace-name'>${escapeHtml(workspaceName)}</span><span class='workspace-path'>${escapeHtml(workspacePath || "No workspace loaded")}</span></span>${nodes.length ? `<span class='workspace-badge'>${nodes.length}</span>` : ""}</button></div>` : "<p class='no-results'>No workspaces found</p>"}</section><footer class='sidebar-footer'><button>⚙ Settings</button><button>?</button></footer><i id='sidebar-resizer' class='sidebar-resizer'></i></aside><section class='workspace-surface'><div class='canvas-actions'><button id='open-workspace'>Open workspace…</button><button id='save-workspace' ${model ? "" : "disabled"}>Save</button></div><div class='toolbar-stack'><nav class='floating-toolbar'>${tool("cursor", "Select", true)}${tool("terminal", "Terminal")}${tool("note", "Note")}<i class='toolbar-divider'></i>${tool("folder", "File Tree")}${tool("globe", "Portal")}<i class='toolbar-divider'></i>${tool("pencil", "Drawing")}${tool("link", "Connection")}</nav>${contextualToolbar()}</div><section class='canvas' id='canvas'><div class='world' style='transform:translate(${origin.x}px,${origin.y}px) scale(${zoom})'>${connectionOverlay()}${nodes.map(renderNode).join("")}</div><div class='empty-state' ${nodes.length ? "hidden" : ""}>Open a macOS workspace.json to render its canvas.</div><div class='minimap'>${nodes.map((node) => { const [[x, y], [w, h]] = node.frame; return `<i style='left:${x / 80}px;top:${y / 80}px;width:${Math.max(w / 80,3)}px;height:${Math.max(h / 80,3)}px'></i>`; }).join("")}</div><div class='canvas-controls'><button id='zoom-out'>−</button><span>${Math.round(zoom * 100)}%</span><button id='zoom-in'>+</button></div></section></section></main>`;
   bind();
+  syncTerminals();
+}
+
+function syncTerminals(): void {
+  const nodes = model?.payload.nodes ?? [];
+  const terminalNodes = new Map(nodes.filter((node) => content(node)[0] === "terminal").map((node) => [node.id, node] as const));
+  for (const [id, view] of terminalViews) { if (!terminalNodes.has(id)) { view.dispose(); terminalViews.delete(id); } }
+  for (const [id, node] of terminalNodes) {
+    const mount = document.querySelector<HTMLElement>(`.terminal-mount[data-terminal-id='${id}']`);
+    if (!mount) continue;
+    terminalViews.get(id)?.dispose();
+    const [, data] = content(node);
+    const view = mountTerminal(mount, id, { command: String(data.command ?? ""), workingDirectory: String(data.workingDirectory ?? ""), spawn: !spawnedTerminalIds.has(id) });
+    spawnedTerminalIds.add(id);
+    terminalViews.set(id, view);
+  }
 }
 
 function bind(): void {

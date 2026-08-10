@@ -13,5 +13,9 @@
     "@tauri-apps/cli": "^2.0.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0"
   }
 }
