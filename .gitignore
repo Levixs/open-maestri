@@ -68,3 +68,7 @@ xcuserdata/
 
 # Open-Maestri
 .maestri
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
