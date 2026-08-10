@@ -14,6 +14,26 @@ export interface WorkspacePayload {
   canvasOrigin: { x: number; y: number };
   canvasZoom: number;
   nodes: CanvasNode[];
+  connections?: WorkspaceConnection[];
+  noteConnections?: WorkspaceConnection[];
+  portalConnections?: WorkspaceConnection[];
+  portalToPortalConnections?: WorkspaceConnection[];
+  noteToNoteConnections?: WorkspaceConnection[];
+}
+
+export interface WorkspaceConnection {
+  id: string;
+  terminalIdA?: string;
+  terminalIdB?: string;
+  terminalId?: string;
+  noteNodeId?: string;
+  portalNodeId?: string;
+  portalIdA?: string;
+  portalIdB?: string;
+  noteNodeIdA?: string;
+  noteNodeIdB?: string;
+  ropePoints?: number[][];
+  status?: "idle" | "communicating" | "disconnected" | "error";
 }
 
 export interface WorkspaceDocument {
