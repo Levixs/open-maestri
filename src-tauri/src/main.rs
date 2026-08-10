@@ -1,8 +1,11 @@
+mod terminal;
+
 use axum::{extract::State, http::{HeaderMap, StatusCode}, routing::post, Json, Router};
 use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, fs, net::SocketAddr, path::Path, sync::Arc};
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
+use terminal::TerminalManager;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -75,7 +78,7 @@ impl Serialize for NodeContent {
 }
 
 #[derive(Default)]
-struct AppState { workspace: RwLock<Option<WorkspaceDocument>> }
+struct AppState { workspace: RwLock<Option<WorkspaceDocument>>, server_port: RwLock<u16> }
 type SharedState = Arc<AppState>;
 
 #[tauri::command]
@@ -129,20 +132,52 @@ async fn cli_handler(State(state): State<SharedState>, headers: HeaderMap, Json(
 
 fn start_loopback_ipc(state: SharedState) {
     tauri::async_runtime::spawn(async move {
-        let app = Router::new().route("/cli", post(cli_handler)).with_state(state);
         let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await { Ok(listener) => listener, Err(error) => { eprintln!("omaestri IPC bind failed: {error}"); return; } };
         let address: SocketAddr = listener.local_addr().expect("loopback listener address");
+        *state.server_port.write().await = address.port();
         eprintln!("omaestri IPC listening on {address}");
+        let app = Router::new().route("/cli", post(cli_handler)).with_state(state);
         if let Err(error) = axum::serve(listener, app).await { eprintln!("omaestri IPC stopped: {error}"); }
     });
 }
 
+#[tauri::command]
+async fn terminal_spawn(app: AppHandle, id: String, command: String, working_directory: String, columns: u16, rows: u16, state: tauri::State<'_, SharedState>, terminals: tauri::State<'_, Arc<TerminalManager>>) -> Result<(), String> {
+    let uuid = Uuid::parse_str(&id).map_err(|error| error.to_string())?;
+    let port = *state.server_port.read().await;
+    let directory = if working_directory.is_empty() { None } else { Some(working_directory) };
+    terminals.spawn(app, uuid, command, directory, port, columns, rows)
+}
+
+#[tauri::command]
+async fn terminal_write(id: String, data: String, terminals: tauri::State<'_, Arc<TerminalManager>>) -> Result<(), String> {
+    terminals.write(Uuid::parse_str(&id).map_err(|error| error.to_string())?, &data)
+}
+
+#[tauri::command]
+async fn terminal_resize(id: String, columns: u16, rows: u16, terminals: tauri::State<'_, Arc<TerminalManager>>) -> Result<(), String> {
+    terminals.resize(Uuid::parse_str(&id).map_err(|error| error.to_string())?, columns, rows)
+}
+
+#[tauri::command]
+async fn terminal_scrollback(id: String, terminals: tauri::State<'_, Arc<TerminalManager>>) -> Result<String, String> {
+    terminals.scrollback(Uuid::parse_str(&id).map_err(|error| error.to_string())?)
+}
+
+#[tauri::command]
+async fn terminal_close(id: String, terminals: tauri::State<'_, Arc<TerminalManager>>) -> Result<(), String> {
+    terminals.close(Uuid::parse_str(&id).map_err(|error| error.to_string())?);
+    Ok(())
+}
+
 fn main() {
     let state = Arc::new(AppState::default());
+    let terminals = Arc::new(TerminalManager::new());
     tauri::Builder::default()
         .manage(state.clone())
+        .manage(terminals)
         .setup(move |_app| { start_loopback_ipc(state.clone()); Ok(()) })
-        .invoke_handler(tauri::generate_handler![load_workspace, save_workspace])
+        .invoke_handler(tauri::generate_handler![load_workspace, save_workspace, terminal_spawn, terminal_write, terminal_resize, terminal_scrollback, terminal_close])
         .run(tauri::generate_context!())
         .expect("error while running open-maestri");
 }
